@@ -1,0 +1,56 @@
+import numpy as np
+import sounddevice as sd
+import tkinter as tk
+import librosa
+
+# Constants
+CHUNK = 1024  # Audio chunk size
+FORMAT = np.float32
+CHANNELS = 1
+RATE = 44100  # Sample rate
+
+# Default pitch shift
+PITCH_SHIFT = 2  # Shift pitch by default
+
+# GUI function to set pitch shift direction
+def set_pitch_shift(value):
+    global PITCH_SHIFT
+    PITCH_SHIFT = int(value)
+    if PITCH_SHIFT == 0:  # Prevent division by zero
+        PITCH_SHIFT = 1  # Set a minimum value to prevent zero division
+
+# Callback function for pitch shifting
+def pitch_shift_callback(indata, outdata, frames, time, status):
+    if status:
+        print('Status:', status)
+
+    # Convert input data to numpy array
+    audio_data = np.frombuffer(indata, dtype=np.float32)
+
+    # Shift pitch using librosa's pitch shifting function
+    shifted_audio = librosa.effects.pitch_shift(audio_data, sr=RATE, n_steps=PITCH_SHIFT)
+
+    # If the shifted audio length is less than the chunk size, pad it
+    if len(shifted_audio) < len(indata):
+        shifted_audio = np.pad(shifted_audio, (0, len(indata) - len(shifted_audio)))
+    else:
+        shifted_audio = shifted_audio[:len(indata)]
+
+    # Copy shifted audio data to output buffer
+    outdata[:] = shifted_audio[:, np.newaxis]
+
+# Start stream with pitch shifting callback
+
+with sd.Stream(channels=CHANNELS, callback=pitch_shift_callback,
+               samplerate=RATE, blocksize=CHUNK):
+    print('Pitch shifting started. Press Ctrl+C to stop.')
+
+    # GUI setup
+    root = tk.Tk()
+    root.title("Pitch Shifter")
+    root.geometry("300x100")
+
+    pitch_slider = tk.Scale(root, from_=-12, to=12, orient="horizontal", label="Pitch Shift", command=set_pitch_shift)
+    pitch_slider.pack()
+
+    root.mainloop()
